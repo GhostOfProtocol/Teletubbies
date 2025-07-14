@@ -1,4 +1,6 @@
 import express from "express";
+import fetch from "node-fetch";
+
 const app = express();
 
 app.get("/", (req, res) => {
@@ -11,10 +13,9 @@ export default function keepAlive() {
     console.log(`✅ KeepAlive server running on port ${PORT}`);
   });
 
-  setInterval(
-    () => {
-      fetch("https://discord-steam-bot.hydraplayer.repl.co/");
-    },
-    4 * 60 * 1000,
-  ); // every 4 minutes
+  setInterval(() => {
+    fetch("https://teletubbies.onrender.com/")
+      .then((res) => console.log(`✅ Self-ping: ${res.status}`))
+      .catch((err) => console.error("❌ Self-ping failed:", err.message));
+  }, 4 * 60 * 1000); // every 4 minutes
 }
