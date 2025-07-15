@@ -1,16 +1,21 @@
-// === server.js for Render === import express from "express"; import fetch from "node-fetch";
+import express from "express";
+import fetch from "node-fetch";
 
 const app = express();
 
-app.get("/", (_, res) => { res.status(200).send("✅ Bot is alive and running!"); });
+app.get("/", (_, res) => {
+  res.status(200).send("✅ Bot is alive!");
+});
 
-export default function keepAlive() { const PORT = process.env.PORT || 3000; app.listen(PORT, () => { console.log(✅ KeepAlive server running on port ${PORT}); });
+export default function keepAlive() {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`✅ KeepAlive server running on port ${PORT}`);
+  });
 
-// Self-ping every 4 minutes using the deployed Render URL
-
-setInterval(() => { const url = "https://teletubbies.onrender.com";
-fetch(url)
-.then((res) => console.log(✅ Self-ping: ${res.status}))
-.catch((err) => console.error("❌ Self-ping failed:", err.message)); }, 4 * 60 * 1000);
+  setInterval(() => {
+    fetch("https://teletubbies.onrender.com")
+      .then(res => console.log(`✅ Self-ping: ${res.status}`))
+      .catch(err => console.error("❌ Self-ping failed:", err.message));
+  }, 240000);
 }
-
