@@ -2,16 +2,23 @@ import { Client, GatewayIntentBits, Partials, EmbedBuilder } from "discord.js";
 import axios from "axios";
 import keepAlive from "./server.js";
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildPresences,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-  partials: [Partials.Channel],
-});
+// === ENVIRONMENT CHECK ===
+const requiredEnv = [
+  "BOT_TOKEN",
+  "TRACKED_USER_ID",
+  "ALERT_USER_ID",
+  "CHANNEL_DISCORD_ACTIVITY",
+  "CHANNEL_STEAM_ALERTS",
+  "CHANNEL_COMPARISON",
+  "STEAM_API_KEY",
+  "STEAM_ID"
+];
+
+for (const key of requiredEnv) {
+  if (!process.env[key]) {
+    console.error(`❌ Missing environment variable: ${key}`);
+  }
+}
 
 // === CONFIGURATION ===
 const TOKEN = process.env.BOT_TOKEN;
@@ -22,6 +29,17 @@ const CHANNEL_STEAM_ALERTS = process.env.CHANNEL_STEAM_ALERTS;
 const CHANNEL_COMPARISON = process.env.CHANNEL_COMPARISON;
 const STEAM_API_KEY = process.env.STEAM_API_KEY;
 const STEAM_ID = process.env.STEAM_ID;
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+  partials: [Partials.Channel],
+});
 
 // === STATE TRACKERS ===
 let lastStatus = null;
@@ -48,26 +66,24 @@ async function getSteamStatus() {
       avatar: player.avatarfull,
     };
   } catch (err) {
-    console.error("[STEAM ERROR]", err.message);
+    console.error("❌ STEAM API error:", err.message);
     return null;
   }
 }
 
-// === DISCORD READY EVENT ===
+// === DISCORD READY ===
 client.once("ready", () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
 
-  const now = new Date();
-  const nowStr = now.toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
-
+  const nowStr = new Date().toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
   const activityChannel = client.channels.cache.get(CHANNEL_DISCORD_ACTIVITY);
+
   if (activityChannel) {
     const onlineEmbed = new EmbedBuilder()
       .setColor(0x00ff00)
       .setDescription("✅ **BOT ONLINE**")
       .setFooter({ text: nowStr });
-
-    activityChannel.send({ embeds: [onlineEmbed] });
+    activityChannel.send({ embeds: [onlineEmbed] }).catch(console.error);
   }
 
   // === STEAM MONITOR LOOP ===
@@ -81,50 +97,33 @@ client.once("ready", () => {
       if (!steam || !user || !steamChannel || !compareChannel) return;
 
       const discordStatus = user?.presence?.status || "offline";
-      const now = new Date();
-      const nowStr = now.toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
+      const nowStr = new Date().toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
 
-      if (steam.online && steam.game) {
-        if (steam.game !== lastSteamGame) {
-          steamGameStartTime = now;
+      if (steam.online && steam.game && steam.game !== lastSteamGame) {
+        steamGameStartTime = Date.now();
+        lastSteamGame = steam.game;
 
-          const steamEmbed = new EmbedBuilder()
-            .setColor(0xfa8072)
-            .setDescription(
-              `🎮 **Steam Game Launched:** ${steam.game}\n<@${ALERT_USER_ID}>`,
-            )
-            .setFooter({ text: nowStr });
+        const embed = new EmbedBuilder()
+          .setColor(0xfa8072)
+          .setDescription(`🎮 **Steam Game Launched:** ${steam.game}\n<@${ALERT_USER_ID}>`)
+          .setFooter({ text: nowStr });
 
-          steamChannel
-            .send({ embeds: [steamEmbed] })
-            .catch((err) =>
-              console.error("[STEAM CHANNEL ERROR]", err.message),
-            );
-          lastSteamGame = steam.game;
-        }
-      } else if (!steam.game && lastSteamGame && steamGameStartTime) {
-        const playedMs = now - steamGameStartTime;
+        steamChannel.send({ embeds: [embed] }).catch(console.error);
+      }
+
+      if (!steam.game && lastSteamGame && steamGameStartTime) {
+        const playedMs = Date.now() - steamGameStartTime;
         const mins = Math.floor(playedMs / 60000);
         const hrs = Math.floor(mins / 60);
-        const remainingMins = mins % 60;
-
         const durationStr =
-          hrs > 0
-            ? `${hrs} hour${hrs !== 1 ? "s" : ""} ${remainingMins} minute${
-                remainingMins !== 1 ? "s" : ""
-              }`
-            : `${remainingMins} minute${remainingMins !== 1 ? "s" : ""}`;
+          hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins} minute${mins !== 1 ? "s" : ""}`;
 
         const stopEmbed = new EmbedBuilder()
           .setColor(0x999999)
-          .setDescription(
-            `**Stopped playing on Steam:** ${lastSteamGame}\nPlayed for **${durationStr}**`,
-          )
+          .setDescription(`🛑 **Stopped playing:** ${lastSteamGame}\nPlayed for **${durationStr}**`)
           .setFooter({ text: nowStr });
 
-        steamChannel
-          .send({ embeds: [stopEmbed] })
-          .catch((err) => console.error("[STEAM CHANNEL ERROR]", err.message));
+        steamChannel.send({ embeds: [stopEmbed] }).catch(console.error);
         steamGameStartTime = null;
         lastSteamGame = null;
       }
@@ -132,156 +131,98 @@ client.once("ready", () => {
       const nowTime = Date.now();
       const cooldownPassed = nowTime - lastSuspiciousTime > 30 * 60 * 1000;
 
-      const isSuspicious =
-        discordStatus === "offline" && (steam.online || steam.game);
-
-      if (
-        isSuspicious &&
-        (steam.game !== lastSuspiciousGame || cooldownPassed)
-      ) {
-        const compareEmbed = new EmbedBuilder()
+      const isSuspicious = discordStatus === "offline" && (steam.online || steam.game);
+      if (isSuspicious && (steam.game !== lastSuspiciousGame || cooldownPassed)) {
+        const embed = new EmbedBuilder()
           .setColor(0xffaa00)
-          .setDescription(
-            `**Flagging**\nSteam (${steam.game ? `playing **${steam.game}**` : "online"}), Discord shows **${discordStatus.toUpperCase()}**\n<@${ALERT_USER_ID}>`,
-          )
+          .setDescription(`⚠️ **Suspicious**\nSteam: ${steam.game || "online"}\nDiscord: ${discordStatus.toUpperCase()}\n<@${ALERT_USER_ID}>`)
           .setFooter({ text: nowStr });
 
-        compareChannel
-          .send({ embeds: [compareEmbed] })
-          .catch((err) =>
-            console.error("[COMPARE CHANNEL ERROR]", err.message),
-          );
-
+        compareChannel.send({ embeds: [embed] }).catch(console.error);
         lastSuspiciousGame = steam.game;
         lastSuspiciousTime = nowTime;
       }
-    } catch (error) {
-      console.error("Error in Steam monitor loop:", error);
+    } catch (err) {
+      console.error("❌ STEAM loop failed:", err);
     }
   }, 60000);
 });
 
-// === PRESENCE UPDATE HANDLER ===
+// === DISCORD PRESENCE UPDATE ===
 client.on("presenceUpdate", (_, newPresence) => {
   if (!newPresence || newPresence.userId !== TRACKED_USER_ID) return;
 
   const member = newPresence.member;
   const status = newPresence.status || "offline";
-  const now = new Date();
-  const nowStr = now.toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
+  const nowStr = new Date().toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
   const channel = client.channels.cache.get(CHANNEL_DISCORD_ACTIVITY);
-  const userTag = member?.user?.tag || `<@${TRACKED_USER_ID}>`;
+  const game = (newPresence.activities || []).find((a) => a.type === 0);
 
   if (status !== lastStatus) {
     if (["online", "idle", "dnd"].includes(status)) {
-      discordOnlineSince = now;
+      discordOnlineSince = new Date();
     }
 
     if (status === "offline" && discordOnlineSince) {
-      const timeOnlineMs = now - discordOnlineSince;
+      const timeOnlineMs = new Date() - discordOnlineSince;
       const mins = Math.floor(timeOnlineMs / 60000);
       const hrs = Math.floor(mins / 60);
-      const remainingMins = mins % 60;
-      const durationStr =
-        hrs > 0
-          ? `${hrs} hour${hrs !== 1 ? "s" : ""} ${remainingMins} minute${
-              remainingMins !== 1 ? "s" : ""
-            }`
-          : `${remainingMins} minute${remainingMins !== 1 ? "s" : ""}`;
+      const durationStr = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
 
-      const offlineEmbed = new EmbedBuilder()
+      const embed = new EmbedBuilder()
         .setColor(0x999999)
-        .setDescription(`**Went offline**\nWas online for **${durationStr}**`)
+        .setDescription(`📴 **Went offline**\nWas online for **${durationStr}**`)
         .setFooter({ text: nowStr });
 
-      channel
-        ?.send({ embeds: [offlineEmbed] })
-        .catch((err) => console.error("[ACTIVITY CHANNEL ERROR]", err.message));
-
+      channel?.send({ embeds: [embed] }).catch(console.error);
       discordOnlineSince = null;
     }
 
     lastStatus = status;
 
     if (status !== "offline") {
-      const statusEmbed = new EmbedBuilder()
-        .setColor(
-          status === "online"
-            ? 0x00ff00
-            : status === "idle"
-              ? 0xffcc00
-              : status === "dnd"
-                ? 0xff0000
-                : 0x666666,
-        )
+      const embed = new EmbedBuilder()
+        .setColor(status === "online" ? 0x00ff00 : status === "idle" ? 0xffcc00 : 0xff0000)
         .setDescription(`📶 **Status:** ${status.toUpperCase()}`)
         .setFooter({ text: nowStr });
 
-      channel
-        ?.send({ embeds: [statusEmbed] })
-        .catch((err) => console.error("[ACTIVITY CHANNEL ERROR]", err.message));
+      channel?.send({ embeds: [embed] }).catch(console.error);
     }
   }
 
-  const activities = newPresence.activities || [];
-  const game = activities.find((a) => a.type === 0);
-
   if (game?.name !== lastGame) {
     if (lastGame) {
-      const stopEmbed = new EmbedBuilder()
+      const embed = new EmbedBuilder()
         .setColor(0xff5555)
-        .setDescription(`**Stopped playing:** ${lastGame}`)
+        .setDescription(`🛑 **Stopped playing:** ${lastGame}`)
         .setFooter({ text: nowStr });
-
-      channel
-        ?.send({ embeds: [stopEmbed] })
-        .catch((err) => console.error("[ACTIVITY CHANNEL ERROR]", err.message));
+      channel?.send({ embeds: [embed] }).catch(console.error);
     }
 
     if (game) {
-      const startEmbed = new EmbedBuilder()
+      const embed = new EmbedBuilder()
         .setColor(0x0099ff)
         .setDescription(`🎮 **Now Playing:** ${game.name}`)
         .setFooter({ text: nowStr });
-
-      channel
-        ?.send({ embeds: [startEmbed] })
-        .catch((err) => console.error("[ACTIVITY CHANNEL ERROR]", err.message));
+      channel?.send({ embeds: [embed] }).catch(console.error);
     }
 
     lastGame = game?.name || null;
   }
 });
 
-// === ERROR HANDLING ===
-process.on("unhandledRejection", (error) => {
-  console.error("Unhandled promise rejection:", error);
-});
-
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception:", error);
-});
-
-client.on("error", (error) => {
-  console.error("Discord client error:", error);
-});
-
-client.on("disconnect", () => {
-  console.log("Bot disconnected, attempting to reconnect...");
-});
-
-client.on("reconnecting", () => {
-  console.log("Bot reconnecting...");
-});
-
-client.on("resume", () => {
-  console.log("Bot connection resumed");
-});
-
-client.on("warn", (warning) => {
-  console.warn("Discord warning:", warning);
-});
+// === ERROR HANDLERS ===
+process.on("unhandledRejection", (err) => console.error("🔴 Unhandled rejection:", err));
+process.on("uncaughtException", (err) => console.error("🔴 Uncaught exception:", err));
+client.on("error", (err) => console.error("🔴 Discord client error:", err));
+client.on("disconnect", () => console.warn("⚠️ Bot disconnected"));
+client.on("reconnecting", () => console.info("🔁 Reconnecting..."));
+client.on("resume", () => console.log("✅ Connection resumed"));
+client.on("warn", (warn) => console.warn("⚠️ Warning:", warn));
 
 // === START BOT ===
 keepAlive();
-client.login(TOKEN);
+
+client.login(TOKEN).catch((err) => {
+  console.error("❌ Discord login failed:", err);
+});
