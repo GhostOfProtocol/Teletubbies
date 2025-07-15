@@ -11,5 +11,6 @@ export default function keepAlive() { const PORT = process.env.PORT || 3000; app
 setInterval(() => { const url = "https://teletubbies.onrender.com";
 fetch(url)
 .then((res) => console.log(✅ Self-ping: ${res.status}))
-.catch((err) => console.error("❌ Self-ping failed:", err.message)); }, 4 * 60 * 1000); // Every 4 minutes }
+.catch((err) => console.error("❌ Self-ping failed:", err.message)); }, 4 * 60 * 1000);
+}
 
