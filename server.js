@@ -8,4 +8,8 @@ export default function keepAlive() { const PORT = process.env.PORT || 3000; app
 
 // Self-ping every 4 minutes using the deployed Render URL
 
-setInterval(() => { const url = "https://teletubbies.onrender.com"; // Your public Render web service URL fetch(url) .then((res) => console.log(✅ Self-ping: ${res.status})) .catch((err) => console.error("❌ Self-ping failed:", err.message)); }, 4 * 60 * 1000); // Every 4 minutes }
+setInterval(() => { const url = "https://teletubbies.onrender.com"; // Your public Render web service URL
+fetch(url)
+.then((res) => console.log(✅ Self-ping: ${res.status}))
+.catch((err) => console.error("❌ Self-ping failed:", err.message)); }, 4 * 60 * 1000); // Every 4 minutes }
+
