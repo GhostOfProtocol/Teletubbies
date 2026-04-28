@@ -1,3 +1,4 @@
+import "./server.js";
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, ActivityType } from "discord.js";
 import axios from "axios";
 import keepAlive from "./server.js";
