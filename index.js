@@ -278,6 +278,18 @@ client.on("messageCreate", async (msg) => {
   }
 });
 
+client.on("error", (err) => {
+  console.error("[DISCORD CLIENT ERROR]", err);
+});
+
+client.on("disconnect", () => {
+  console.warn("[DISCORD] Client disconnected");
+});
+
+client.on("warn", (info) => {
+  console.warn("[DISCORD WARN]", info);
+});
+
 keepAlive();
 client.login(TOKEN).catch((err) => {
   console.error("Login failed:", err);
