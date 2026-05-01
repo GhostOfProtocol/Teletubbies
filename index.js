@@ -1,3 +1,7 @@
+console.log("[DEBUG] BOT_TOKEN set:", !!process.env.BOT_TOKEN);
+console.log("[DEBUG] TRACKED_USER_ID:", process.env.TRACKED_USER_ID);
+console.log("[DEBUG] STEAM_API_KEY set:", !!process.env.STEAM_API_KEY);
+
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, ActivityType } from "discord.js";
 import axios from "axios";
 import keepAlive from "./server.js";
@@ -58,7 +62,7 @@ async function getSteamStatus() {
 
 // === DISCORD PRESENCE UPDATE ===
 client.on("presenceUpdate", (oldPresence, newPresence) => {
-if (!newPresence || newPresence.user.id !== TRACKED_USER_ID) return;
+  if (!newPresence || newPresence.user.id !== TRACKED_USER_ID) return;
 
   const member = newPresence.member;
   const status = newPresence.status || "offline";
@@ -141,7 +145,7 @@ client.once("ready", async () => {
       .setColor(0x00ff00)
       .setDescription("**BOT ONLINE**")
       .setFooter({ text: nowStr });
-await activityChannel.send({ embeds: [embed] }).catch(console.error);
+    await activityChannel.send({ embeds: [embed] }).catch(console.error);
   }
 
   setInterval(async () => {
