@@ -295,6 +295,14 @@ client.on("warn", (info) => {
 });
 
 keepAlive();
-client.login(TOKEN).catch((err) => {
-  console.error("Login failed:", err);
-});
+
+console.log("[DEBUG] Attempting Discord login...");
+client.login(TOKEN)
+  .then(() => console.log("[DEBUG] Login promise resolved"))
+  .catch((err) => console.error("[DEBUG] Login rejected:", err));
+
+setTimeout(() => {
+  console.log("[DEBUG] Client status after 15s:", client.ws.status);
+  console.log("[DEBUG] Client uptime:", client.uptime);
+  console.log("[DEBUG] Ping:", client.ws.ping);
+}, 15000);
