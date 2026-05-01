@@ -1,4 +1,3 @@
-import "./server.js";
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, ActivityType } from "discord.js";
 import axios from "axios";
 import keepAlive from "./server.js";
@@ -133,7 +132,7 @@ async function getSteamHours() {
   }
 }
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`Bot is online as ${client.user.tag}`);
   const activityChannel = client.channels.cache.get(CHANNEL_DISCORD_ACTIVITY);
   const nowStr = new Date().toLocaleString("de-DE", { timeZone: "Europe/Berlin" });
@@ -142,7 +141,7 @@ client.once("ready", () => {
       .setColor(0x00ff00)
       .setDescription("**BOT ONLINE**")
       .setFooter({ text: nowStr });
-    activityChannel.send({ embeds: [embed] });
+await activityChannel.send({ embeds: [embed] }).catch(console.error);
   }
 
   setInterval(async () => {
